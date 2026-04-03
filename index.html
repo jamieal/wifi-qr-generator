@@ -430,8 +430,8 @@
     </p>
 </footer>
 
-<!-- QR Code library (MIT license) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<!-- QR Code library (MIT license) — browser-ready, exposes global QRCode -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
 <script>
 (function () {
@@ -448,6 +448,7 @@
     const toggleBtn = document.querySelector('.toggle-password');
 
     let currentWifiString = '';
+    let qrInstance = null;
 
     // Toggle password visibility
     toggleBtn.addEventListener('click', () => {
@@ -478,21 +479,21 @@
         return str.replace(/([\\;,":.])/g, '\\$1');
     }
 
-    // Generate QR into #qr-live at a given size
-    function generateQR(size) {
+    // Generate QR into #qr-live
+    function generateQR() {
         qrLive.innerHTML = '';
-        return QRCode.toCanvas(currentWifiString, {
-            width: size,
-            margin: 2,
-            color: { dark: '#000000', light: '#ffffff' },
-            errorCorrectionLevel: 'H'
-        }).then(canvas => {
-            qrLive.appendChild(canvas);
+        qrInstance = new QRCode(qrLive, {
+            text: currentWifiString,
+            width: 260,
+            height: 260,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
         });
     }
 
     // Form submit
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', (e) => {
         e.preventDefault();
         if (!ssidInput.value.trim()) return;
 
@@ -503,39 +504,53 @@
         testHint.classList.add('visible');
         downloadSection.classList.add('visible');
 
-        await generateQR(260);
+        generateQR();
     });
+
+    // Download at a specific size by creating a temporary QR
+    function downloadQR(size) {
+        if (!currentWifiString) return;
+
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        document.body.appendChild(tempDiv);
+
+        new QRCode(tempDiv, {
+            text: currentWifiString,
+            width: size,
+            height: size,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        // qrcodejs renders async via canvas then creates an img
+        setTimeout(() => {
+            const canvas = tempDiv.querySelector('canvas');
+            if (canvas) {
+                const link = document.createElement('a');
+                link.download = `wifi-qr-${size}x${size}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+            document.body.removeChild(tempDiv);
+        }, 100);
+    }
 
     // Download buttons
     document.querySelectorAll('.size-btn[data-size]').forEach(btn => {
         btn.addEventListener('click', () => {
             const size = parseInt(btn.dataset.size, 10);
-            downloadQR(size, size);
+            downloadQR(size);
         });
     });
 
     document.getElementById('custom-download').addEventListener('click', () => {
         const w = parseInt(document.getElementById('custom-w').value, 10) || 400;
         const h = parseInt(document.getElementById('custom-h').value, 10) || 400;
-        downloadQR(Math.max(w, h), Math.max(w, h)); // QR codes are square
+        downloadQR(Math.max(w, h));
     });
-
-    async function downloadQR(width, height) {
-        if (!currentWifiString) return;
-
-        const size = Math.max(width, height);
-        const canvas = await QRCode.toCanvas(currentWifiString, {
-            width: size,
-            margin: 2,
-            color: { dark: '#000000', light: '#ffffff' },
-            errorCorrectionLevel: 'H'
-        });
-
-        const link = document.createElement('a');
-        link.download = `wifi-qr-${size}x${size}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    }
 })();
 </script>
 
