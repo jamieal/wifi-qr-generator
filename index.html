@@ -241,6 +241,38 @@
 
         .test-hint.visible { display: block; }
 
+        .test-qr-section {
+            text-align: center;
+            margin-bottom: 1.25rem;
+            padding: 1rem;
+            background: #F0EDFF;
+            border-radius: 10px;
+        }
+
+        .test-qr-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .test-qr-sublabel {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 0.4rem;
+        }
+
+        #test-qr { display: flex; justify-content: center; }
+        #test-qr canvas, #test-qr img { border-radius: 6px; }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 1rem 0;
+        }
+
         .download-section {
             display: none;
         }
@@ -384,7 +416,15 @@
                 <div class="qr-live" id="qr-live" style="display:none;"></div>
 
                 <div class="test-hint" id="test-hint">
-                    &#9989; Point your phone camera at the QR code above to test it! Most phones connect automatically.
+                    <strong>Step 1:</strong> Scan the QR above to join WiFi<br>
+                    <strong>Step 2:</strong> Scan the small QR below to confirm you're connected
+                </div>
+
+                <!-- Test connection QR -->
+                <div class="test-qr-section" id="test-qr-section" style="display:none;">
+                    <div class="test-qr-label">Verify Connection</div>
+                    <div id="test-qr"></div>
+                    <div class="test-qr-sublabel">Scan after joining WiFi</div>
                 </div>
 
                 <div class="download-section" id="download-section">
@@ -403,6 +443,13 @@
                             Poster<br><span class="dim">1200 &times; 1200 px</span>
                         </button>
                     </div>
+
+                    <div class="divider"></div>
+
+                    <button class="btn btn-primary" id="download-card" type="button" style="margin-top:0.75rem;">
+                        &#128196; Download Print Card (both QRs)
+                    </button>
+
                     <div class="custom-size">
                         <input type="number" id="custom-w" placeholder="W" min="100" max="4000">
                         <span>&times;</span>
@@ -448,7 +495,21 @@
     const toggleBtn = document.querySelector('.toggle-password');
 
     let currentWifiString = '';
+    let currentSSID = '';
     let qrInstance = null;
+
+    const testQrSection = document.getElementById('test-qr-section');
+    const testQrEl = document.getElementById('test-qr');
+
+    // Determine the base URL for the connected page
+    const baseUrl = (() => {
+        const loc = window.location;
+        if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+            return loc.origin + '/connected.html';
+        }
+        // GitHub Pages or custom domain
+        return loc.origin + loc.pathname.replace(/\/[^/]*$/, '/connected.html');
+    })();
 
     // Toggle password visibility
     toggleBtn.addEventListener('click', () => {
@@ -479,7 +540,7 @@
         return str.replace(/([\\;,":.])/g, '\\$1');
     }
 
-    // Generate QR into #qr-live
+    // Generate WiFi QR into #qr-live
     function generateQR() {
         qrLive.innerHTML = '';
         qrInstance = new QRCode(qrLive, {
@@ -492,50 +553,140 @@
         });
     }
 
+    // Generate test connection QR
+    function generateTestQR() {
+        testQrEl.innerHTML = '';
+        new QRCode(testQrEl, {
+            text: baseUrl,
+            width: 120,
+            height: 120,
+            colorDark: '#6C63FF',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+
     // Form submit
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         if (!ssidInput.value.trim()) return;
 
+        currentSSID = ssidInput.value.trim();
         currentWifiString = buildWifiString();
 
         placeholder.style.display = 'none';
         qrLive.style.display = 'flex';
         testHint.classList.add('visible');
         downloadSection.classList.add('visible');
+        testQrSection.style.display = 'block';
 
         generateQR();
+        generateTestQR();
     });
 
-    // Download at a specific size by creating a temporary QR
+    // Helper: render a QR into a temp off-screen div and return the canvas
+    function renderTempQR(text, size, color) {
+        return new Promise((resolve) => {
+            const tempDiv = document.createElement('div');
+            tempDiv.style.cssText = 'position:absolute;left:-9999px;';
+            document.body.appendChild(tempDiv);
+
+            new QRCode(tempDiv, {
+                text: text,
+                width: size,
+                height: size,
+                colorDark: color || '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            setTimeout(() => {
+                const canvas = tempDiv.querySelector('canvas');
+                document.body.removeChild(tempDiv);
+                resolve(canvas);
+            }, 150);
+        });
+    }
+
+    // Download WiFi QR at a specific size
     function downloadQR(size) {
         if (!currentWifiString) return;
-
-        const tempDiv = document.createElement('div');
-        tempDiv.style.position = 'absolute';
-        tempDiv.style.left = '-9999px';
-        document.body.appendChild(tempDiv);
-
-        new QRCode(tempDiv, {
-            text: currentWifiString,
-            width: size,
-            height: size,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H
+        renderTempQR(currentWifiString, size).then(canvas => {
+            if (!canvas) return;
+            const link = document.createElement('a');
+            link.download = `wifi-qr-${size}x${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
         });
+    }
 
-        // qrcodejs renders async via canvas then creates an img
-        setTimeout(() => {
-            const canvas = tempDiv.querySelector('canvas');
-            if (canvas) {
-                const link = document.createElement('a');
-                link.download = `wifi-qr-${size}x${size}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            }
-            document.body.removeChild(tempDiv);
-        }, 100);
+    // Download printable card with both QR codes
+    async function downloadPrintCard() {
+        if (!currentWifiString) return;
+
+        const wifiCanvas = await renderTempQR(currentWifiString, 400);
+        const testCanvas = await renderTempQR(baseUrl, 200, '#6C63FF');
+        if (!wifiCanvas || !testCanvas) return;
+
+        // Draw the card
+        const cardW = 800;
+        const cardH = 600;
+        const card = document.createElement('canvas');
+        card.width = cardW;
+        card.height = cardH;
+        const ctx = card.getContext('2d');
+
+        // White background with rounded feel
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, cardW, cardH);
+
+        // Border
+        ctx.strokeStyle = '#E5E7EB';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(4, 4, cardW - 8, cardH - 8);
+
+        // Title
+        ctx.fillStyle = '#1A1A2E';
+        ctx.font = 'bold 28px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('WiFi Connect', cardW / 2, 50);
+
+        // Network name
+        ctx.fillStyle = '#6C63FF';
+        ctx.font = '600 20px Inter, system-ui, sans-serif';
+        ctx.fillText(currentSSID, cardW / 2, 80);
+
+        // Step 1 — WiFi QR (left area)
+        ctx.fillStyle = '#1A1A2E';
+        ctx.font = 'bold 16px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Step 1: Connect to WiFi', 260, 120);
+
+        ctx.drawImage(wifiCanvas, 60, 135, 400, 400);
+
+        // Step 2 — Test QR (right area)
+        ctx.fillStyle = '#6C63FF';
+        ctx.font = 'bold 14px Inter, system-ui, sans-serif';
+        ctx.fillText('Step 2: Verify', 620, 120);
+
+        ctx.drawImage(testCanvas, 520, 135, 200, 200);
+
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '13px Inter, system-ui, sans-serif';
+        ctx.fillText('Scan after connecting', 620, 355);
+        ctx.fillText('to confirm you\'re online', 620, 372);
+
+        // Footer
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Point your phone camera at each QR code', cardW / 2, cardH - 30);
+
+        // Download
+        const link = document.createElement('a');
+        link.download = `wifi-card-${currentSSID.replace(/\s+/g, '-')}.png`;
+        link.href = card.toDataURL('image/png');
+        link.click();
     }
 
     // Download buttons
@@ -551,6 +702,8 @@
         const h = parseInt(document.getElementById('custom-h').value, 10) || 400;
         downloadQR(Math.max(w, h));
     });
+
+    document.getElementById('download-card').addEventListener('click', downloadPrintCard);
 })();
 </script>
 
