@@ -2,7 +2,7 @@
 
 Generate a QR code for your WiFi network so anyone can connect by scanning it with their phone. Free, open source, and your credentials never leave your browser.
 
-**[Use it now](https://your-username.github.io/wifi-qr-generator)** (update link after deploy)
+**[Use it now](https://jamieal.github.io/wifi-qr-generator)** (update link after deploy)
 
 ## Features
 
@@ -50,7 +50,7 @@ python wifi_qr.py -s "MyNetwork" -p "mypassword" -o wifi.png
 It's a single HTML file with no build step. Clone it and open `index.html`, or deploy anywhere that serves static files.
 
 ```bash
-git clone https://github.com/your-username/wifi-qr-generator.git
+git clone https://github.com/jamieal/wifi-qr-generator.git
 open wifi-qr-generator/index.html
 ```
 
